@@ -43,22 +43,49 @@ public class JoinQA {
 		public void map(Object offset, Text line, Context context)
 				throws IOException, InterruptedException {
 
+			// Ignore the header
+			if(line.toString().startsWith("Id,PostTypeId")){
+				return;
+			}
+			
 			// Parse the input line
 			String[] parsedData = this.csvParser.parseLine(line.toString());
 			JoinQAValue value = null;
 			JoinQAKey key = null;
 
-			if ((!parsedData[1].isEmpty()) && parsedData[1].equals("1") && (! parsedData[2].equals("None"))) {
+			if(! isValid(parsedData)){
+				return;
+			}
+			
+			if (parsedData[1].equals("1") && ! parsedData[2].equalsIgnoreCase("None")) {
 				// Question
 				key = new JoinQAKey(parsedData[2], "Q");
 				value = new JoinQAValue("", parsedData[13]);
 			} else {
 				// Answer
-				key = new JoinQAKey(parsedData[0], "A");
-				value = new JoinQAValue(parsedData[7], "");
+				// User Id must exists otherwise ignore
+				if(parsedData[7].equalsIgnoreCase("None")){
+					return;
+				}else{
+					key = new JoinQAKey(parsedData[0], "A");
+					value = new JoinQAValue(parsedData[7], "");
+				}
 			}
-
 			context.write(key, value);
+		}
+
+		/**
+		 * remove invalid entries
+		 * @param parsedData
+		 * @return
+		 */
+		private boolean isValid(String[] parsedData) {
+			if(parsedData[0].isEmpty() ||  parsedData[1].isEmpty() 
+					|| parsedData[2].isEmpty() || parsedData[7].isEmpty()){
+				return false;
+			}
+				
+			return true;
 		}
 	}
 
@@ -71,17 +98,17 @@ public class JoinQA {
 			ArrayList<JoinQAValue> questions = new ArrayList<JoinQAValue>();
 
 			for (JoinQAValue value : values) {
-				if (key.getFlag().equals("A")) {
-					questions.add(value);
+				// Get all questions those will be secondary sorted followed by answers
+				if (key.getFlag().toString().equals("Q")) {
+					questions.add(new JoinQAValue(value.getUserId().toString(), value.getHashTags().toString()));
 				} else {
 					Iterator<JoinQAValue> questionIterator = questions.iterator();
 					while (questionIterator.hasNext()) {
 						JoinQAValue question = questionIterator.next();
-						context.write(question.getHashTags(), value.getUserId());
+						context.write(value.getUserId(), question.getHashTags());
 					}
 				}
 			}
-
 		}
 	}
 
@@ -89,7 +116,7 @@ public class JoinQA {
 			Partitioner<JoinQAKey, JoinQAValue> {
 		/**
 		 * Based on the configured number of reducer, this will partition the
-		 * data approximately evenly based on number of unique carrier names
+		 * data approximately evenly based on number of unique post Ids
 		 */
 		@Override
 		public int getPartition(JoinQAKey key, JoinQAValue value,
@@ -103,7 +130,9 @@ public class JoinQA {
 		protected JoinQAGroupComparator() {
 			super(JoinQAKey.class, true);
 		}
-
+		/**
+		 * First sort by PostId and if equal then sort by flag
+		 */
 		@Override
 		public int compare(WritableComparable w1, WritableComparable w2) {
 			JoinQAKey key1 = (JoinQAKey) w1;

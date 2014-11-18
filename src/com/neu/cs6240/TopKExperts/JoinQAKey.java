@@ -8,12 +8,13 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
 
 /**
- * JoinQAHelper implements the WritableComparable
- * This class contains useful functions used for keyComparator and 
- * Grouping comparator
+ * JoinQAKey implements the WritableComparable
+ * This class contains useful functions used for keyComparator 
  */
 public class JoinQAKey implements WritableComparable {
+	// Post Id
 	Text postId;
+	// flag representing whether this is a "Question[Q] / Answer[A]"
 	Text flag;
 
     /**
@@ -23,9 +24,12 @@ public class JoinQAKey implements WritableComparable {
     	this.flag = new Text();
     	this.postId = new Text();    	
     }
-  
-   
-
+    
+    /**
+     * constructor
+     * @param postId
+     * @param flag
+     */
 	public JoinQAKey(String postId, String flag) {
 		this.flag = new Text(flag);
 		this.postId = new Text(postId);
@@ -34,17 +38,15 @@ public class JoinQAKey implements WritableComparable {
 	/**
 	 * @return the postId
 	 */
-	public String getPostId() {
-		return postId.toString();
+	public Text getPostId() {
+		return postId;
 	}
-
-
 
 	/**
 	 * @return the flag
 	 */
-	public String getFlag() {
-		return flag.toString();
+	public Text getFlag() {
+		return flag;
 	}
   
     /**
@@ -68,18 +70,21 @@ public class JoinQAKey implements WritableComparable {
             this.flag.readFields(in);
             this.postId.readFields(in);
     }
-
-
-
+    
+    /**
+     * First sort by Post Id and then by flag
+     */
 	@Override
 	public int compareTo(Object object) {
 		JoinQAKey ip2 = (JoinQAKey) object;
-        int cmp = ip2.getPostId().compareTo(getPostId());
+		int postId2 = Integer.parseInt(ip2.getPostId().toString());
+		int postId = Integer.parseInt(getPostId().toString());
+        int cmp = (postId == postId2) ? 0 : 1;
         if (cmp != 0) {
         	return cmp;
-        }
-        
-        return ip2.getFlag().compareTo(getFlag());
+        }        
+        // - because Q must come before A
+        return - getFlag().compareTo(ip2.getFlag());
 	}
 
 }

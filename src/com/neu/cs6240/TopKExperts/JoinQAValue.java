@@ -8,12 +8,12 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
 /**
- * JoinQAHelper implements the WritableComparable
- * This class contains useful functions used for keyComparator and 
- * Grouping comparator
+ * JoinQAValue implements the Writable
  */
 public class JoinQAValue implements Writable {
+	// List of the hash tags for the post
 	Text hashTags;
+	// User who has correctly answered the question
 	Text userId;
 
     /**
@@ -23,7 +23,16 @@ public class JoinQAValue implements Writable {
     	this.hashTags = new Text();
     	this.userId = new Text();
     }
-
+    /**
+     * constructor
+     * @param userId
+     * @param hashTags
+     */
+	public JoinQAValue(String userId, String hashTags) {
+    	this.hashTags = new Text(hashTags);
+    	this.userId = new Text(userId);
+    }
+	
 	/**
 	 * @return the hashTags
 	 */
@@ -37,12 +46,6 @@ public class JoinQAValue implements Writable {
 	public Text getUserId() {
 		return userId;
 	}
-
-	public JoinQAValue(String userId, String hashTags) {
-    	this.hashTags = new Text(hashTags);
-    	this.userId = new Text(userId);
-    }
-   
   
     /**
      * overrider the write method to support write operation
