@@ -35,6 +35,12 @@ import au.com.bytecode.opencsv.CSVParser;
 
 public class JoinQA {
 
+	private static final int POST_ID = 0;
+	private static final int POST_TYPE_ID = 1;
+	private static final int ACCEPTED_ANS_ID = 2;
+	private static final int OWNER_USER_ID = 6;
+	private static final int TAGS = 10;
+
 	public static class JoinQAMapper extends
 			Mapper<Object, Text, JoinQAKey, JoinQAValue> {
 		// initialize CSVParser as comma separated values
@@ -43,48 +49,61 @@ public class JoinQA {
 		public void map(Object offset, Text line, Context context)
 				throws IOException, InterruptedException {
 
-			// Ignore the header
-			if(line.toString().startsWith("Id,PostTypeId")){
-				return;
-			}
-			
 			// Parse the input line
 			String[] parsedData = this.csvParser.parseLine(line.toString());
 			JoinQAValue value = null;
 			JoinQAKey key = null;
 
-			if(! isValid(parsedData)){
+			if (!isValid(parsedData)) {
 				return;
 			}
-			
-			if (parsedData[1].equals("1") && ! parsedData[2].equalsIgnoreCase("None")) {
+
+			if (parsedData[POST_TYPE_ID].equals("1")) {
 				// Question
-				key = new JoinQAKey(parsedData[2], "Q");
-				value = new JoinQAValue("", parsedData[13]);
+				key = new JoinQAKey(parsedData[ACCEPTED_ANS_ID], "Q");
+				value = new JoinQAValue("", parsedData[TAGS]);
 			} else {
 				// Answer
 				// User Id must exists otherwise ignore
-				if(parsedData[7].equalsIgnoreCase("None")){
-					return;
-				}else{
-					key = new JoinQAKey(parsedData[0], "A");
-					value = new JoinQAValue(parsedData[7], "");
-				}
+				key = new JoinQAKey(parsedData[POST_ID], "A");
+				value = new JoinQAValue(parsedData[OWNER_USER_ID], "");
+
 			}
 			context.write(key, value);
 		}
 
 		/**
 		 * remove invalid entries
+		 * 
 		 * @param parsedData
 		 * @return
 		 */
 		private boolean isValid(String[] parsedData) {
-			if(parsedData[0].isEmpty() ||  parsedData[1].isEmpty() 
-					|| parsedData[2].isEmpty() || parsedData[7].isEmpty()){
+			// We must have POST_ID & POST_TYPE_ID
+			if (parsedData[POST_ID].isEmpty()
+					|| parsedData[POST_TYPE_ID].isEmpty()) {
 				return false;
 			}
-				
+			
+			// POST_TYPE_ID must be either 1 / 2
+			if (!parsedData[POST_TYPE_ID].equals("1")
+					&& !parsedData[POST_TYPE_ID].equals("2")) {
+				return false;
+			}
+
+			// POST_TYPE_ID = 1 => we must have ACCEPTED_ANS_ID & TAGS
+			if (parsedData[POST_TYPE_ID].equals("1")
+					&& (parsedData[ACCEPTED_ANS_ID].isEmpty() || parsedData[TAGS]
+							.isEmpty())) {
+				return false;
+			}
+
+			// POST_TYPE_ID = 2 => we must have POST_ID & OWNER_USER_ID
+			if (parsedData[POST_TYPE_ID].equals("2")
+					&& (parsedData[OWNER_USER_ID].isEmpty())) {
+				return false;
+			}
+
 			return true;
 		}
 	}
@@ -98,13 +117,16 @@ public class JoinQA {
 			ArrayList<JoinQAValue> questions = new ArrayList<JoinQAValue>();
 
 			for (JoinQAValue value : values) {
-				// Get all questions those will be secondary sorted followed by answers
+				// Get all questions those will be secondary sorted followed by
+				// answers
 				if (key.getFlag().toString().equals("Q")) {
-					questions.add(new JoinQAValue(value.getUserId().toString(), value.getHashTags().toString()));
+					questions.add(new JoinQAValue(value.getUserId().toString(),
+							value.getHashTags().toString()));
 				} else {
-					Iterator<JoinQAValue> questionIterator = questions.iterator();
+					Iterator<JoinQAValue> questionIterator = questions
+							.iterator();
 					while (questionIterator.hasNext()) {
-						JoinQAValue question = questionIterator.next();
+						JoinQAValue question = questionIterator.next();						
 						context.write(value.getUserId(), question.getHashTags());
 					}
 				}
@@ -130,6 +152,7 @@ public class JoinQA {
 		protected JoinQAGroupComparator() {
 			super(JoinQAKey.class, true);
 		}
+
 		/**
 		 * First sort by PostId and if equal then sort by flag
 		 */
@@ -139,8 +162,8 @@ public class JoinQA {
 			JoinQAKey key2 = (JoinQAKey) w2;
 			return key1.getPostId().compareTo(key2.getPostId());
 		}
-	}	
-		
+	}
+
 	public static void main(String[] args) throws Exception {
 		Configuration conf = new Configuration();
 		String[] otherArgs = new GenericOptionsParser(conf, args)
@@ -156,7 +179,7 @@ public class JoinQA {
 		job.setOutputKeyClass(JoinQAKey.class);
 		job.setOutputValueClass(JoinQAValue.class);
 		job.setPartitionerClass(JoinQAPartitioner.class);
-	    job.setGroupingComparatorClass(JoinQAGroupComparator.class);
+		job.setGroupingComparatorClass(JoinQAGroupComparator.class);
 		FileInputFormat.addInputPath(job, new Path(otherArgs[0]));
 		FileOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
 		System.exit(job.waitForCompletion(true) ? 0 : 1);

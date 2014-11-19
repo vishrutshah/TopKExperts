@@ -78,8 +78,8 @@ public class JoinQAKey implements WritableComparable {
 	public int compareTo(Object object) {
 		JoinQAKey ip2 = (JoinQAKey) object;
 		int postId2 = Integer.parseInt(ip2.getPostId().toString());
-		int postId = Integer.parseInt(getPostId().toString());
-        int cmp = (postId == postId2) ? 0 : 1;
+		int postId = Integer.parseInt(getPostId().toString());		
+        int cmp = (postId == postId2) ? 0 : (postId < postId2 ? -1 : 1);
         if (cmp != 0) {
         	return cmp;
         }        
