@@ -20,6 +20,7 @@ import java.util.Iterator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.io.WritableComparator;
@@ -84,7 +85,7 @@ public class JoinQA {
 					|| parsedData[POST_TYPE_ID].isEmpty()) {
 				return false;
 			}
-			
+
 			// POST_TYPE_ID must be either 1 / 2
 			if (!parsedData[POST_TYPE_ID].equals("1")
 					&& !parsedData[POST_TYPE_ID].equals("2")) {
@@ -109,7 +110,7 @@ public class JoinQA {
 	}
 
 	public static class JoinQAReducer extends
-			Reducer<JoinQAKey, JoinQAValue, Text, Text> {
+			Reducer<JoinQAKey, JoinQAValue, Text, NullWritable> {
 
 		public void reduce(JoinQAKey key, Iterable<JoinQAValue> values,
 				Context context) throws IOException, InterruptedException {
@@ -126,8 +127,10 @@ public class JoinQA {
 					Iterator<JoinQAValue> questionIterator = questions
 							.iterator();
 					while (questionIterator.hasNext()) {
-						JoinQAValue question = questionIterator.next();						
-						context.write(value.getUserId(), question.getHashTags());
+						JoinQAValue question = questionIterator.next();	
+						StringBuilder output = new StringBuilder();
+						output.append(value.getUserId().toString()).append(",").append(question.getHashTags().toString());
+						context.write(new Text(output.toString()), NullWritable.get());
 					}
 				}
 			}
@@ -154,7 +157,7 @@ public class JoinQA {
 		}
 
 		/**
-		 * First sort by PostId and if equal then sort by flag
+		 * Make sure that there'll be single reduce call per Post Id
 		 */
 		@Override
 		public int compare(WritableComparable w1, WritableComparable w2) {
