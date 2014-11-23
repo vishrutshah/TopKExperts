@@ -15,8 +15,6 @@
 package com.neu.cs6240.TopKExperts;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -47,7 +45,14 @@ public class UserAnswerCountPerHashTag {
 				throws IOException, InterruptedException {
 
 			// Parse the input line
-			String[] parsedData = this.csvParser.parseLine(line.toString());
+			String[] parsedData = null;
+			try{
+				parsedData = this.csvParser.parseLine(line.toString()); 
+			}catch(Exception e){
+				// In case of bad data record ignore them
+				return;
+			}
+			
 			UserAnswerCountPerHashTagKey key = null;
 			
 			if (!isValid(parsedData)) {
@@ -140,7 +145,11 @@ public class UserAnswerCountPerHashTag {
 		}
 	}
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Exception {		
+		System.exit(UserAnswerCountPerHashTag.initUserAnswerCountPerHashTag(args) ? 0 : 1);	
+	}
+	
+	public static boolean initUserAnswerCountPerHashTag(String[] args) throws Exception{
 		Configuration conf = new Configuration();
 		String[] otherArgs = new GenericOptionsParser(conf, args)
 				.getRemainingArgs();
@@ -158,6 +167,7 @@ public class UserAnswerCountPerHashTag {
 		job.setGroupingComparatorClass(UserAnswerCountPerHashTagGroupComparator.class);
 		FileInputFormat.addInputPath(job, new Path(otherArgs[0]));
 		FileOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
-		System.exit(job.waitForCompletion(true) ? 0 : 1);
+		
+		return job.waitForCompletion(true);
 	}
 }

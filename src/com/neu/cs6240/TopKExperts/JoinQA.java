@@ -52,13 +52,23 @@ public class JoinQA {
 	public static class JoinQAMapper extends
 			Mapper<Object, Text, JoinQAKey, JoinQAValue> {
 		// initialize CSVParser as comma separated values
-		private CSVParser csvParser = new CSVParser(',', '"');
+		private CSVParser csvParser = new CSVParser(',','"');
+		
 
 		public void map(Object offset, Text line, Context context)
 				throws IOException, InterruptedException {
-
+			
+			System.out.println("Line " + line.toString() );
+			
 			// Parse the input line
-			String[] parsedData = this.csvParser.parseLine(line.toString());
+			String[] parsedData = null;
+			try{
+				parsedData = this.csvParser.parseLine(line.toString()); 
+			}catch(Exception e){
+				// In case of bad data record ignore them
+				return;
+			}
+			 
 			JoinQAValue value = null;
 			JoinQAKey key = null;
 
@@ -224,6 +234,42 @@ public class JoinQA {
 		job.setGroupingComparatorClass(JoinQAGroupComparator.class);
 		FileInputFormat.addInputPath(job, new Path(otherArgs[0]));
 		FileOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
-		System.exit(job.waitForCompletion(true) ? 0 : 1);
+		boolean isSucess = false; 
+		
+		isSucess = job.waitForCompletion(true);
+		
+		if(isSucess){
+			// On successful completion of JoinQA start UserAnswerCountPerHashTag
+			System.out.println("MR - JoinQA complete. Starting UserAnswerCountPerHashTag...");
+			String[] argsForMR2 = new String[2];
+			argsForMR2[0] = otherArgs[1];
+			argsForMR2[1] = otherArgs[1] + "MR2";
+			isSucess = UserAnswerCountPerHashTag.initUserAnswerCountPerHashTag(argsForMR2);
+						
+			if(isSucess){
+				// On successful completion of UserAnswerCountPerHashTag start TopKPerHashTag
+				System.out.println("MR - UserAnswerCountPerHashTag complete. Starting TopKPerHashTag...");
+				String[] argsForMR3 = new String[2];
+				argsForMR3[0] = argsForMR2[1];
+				argsForMR3[1] = argsForMR2[1] + "MR3";
+				isSucess = TopKPerHashTag.initTopKPerHashTag(argsForMR3);
+				if(isSucess){
+					// Successfully complete TopKPerHashTag MR
+					System.out.println("All MR - Successful.");
+				}else{
+					// Failed UserAnswerCountPerHashTag MR
+					System.out.println("MR - TopKPerHashTag failed.");
+				}
+			}else{
+				// On unsuccessful completion of JoinQA end MR
+				System.out.println("MR - UserAnswerCountPerHashTag failed.");
+			}
+			
+		}else{
+			// On unsuccessful completion of JoinQA end MR
+			System.out.println("MR - JoinQA failed.");
+		}
+		
+		System.exit(isSucess ? 0 : 1);		
 	}
 }
