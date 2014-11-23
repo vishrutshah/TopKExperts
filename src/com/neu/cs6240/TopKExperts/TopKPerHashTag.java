@@ -48,7 +48,14 @@ public class TopKPerHashTag {
 				throws IOException, InterruptedException {
 
 			// Parse the input line
-			String[] parsedData = this.csvParser.parseLine(line.toString());
+			String[] parsedData = null;
+			try{
+				parsedData = this.csvParser.parseLine(line.toString()); 
+			}catch(Exception e){
+				// In case of bad data record ignore them
+				return;
+			}
+			
 			TopKPerHashTagKey key = null;
 			int ansCountPerUserId;
 			

@@ -52,13 +52,23 @@ public class JoinQA {
 	public static class JoinQAMapper extends
 			Mapper<Object, Text, JoinQAKey, JoinQAValue> {
 		// initialize CSVParser as comma separated values
-		private CSVParser csvParser = new CSVParser(',', '"');
+		private CSVParser csvParser = new CSVParser(',','"');
+		
 
 		public void map(Object offset, Text line, Context context)
 				throws IOException, InterruptedException {
-
+			
+			System.out.println("Line " + line.toString() );
+			
 			// Parse the input line
-			String[] parsedData = this.csvParser.parseLine(line.toString());
+			String[] parsedData = null;
+			try{
+				parsedData = this.csvParser.parseLine(line.toString()); 
+			}catch(Exception e){
+				// In case of bad data record ignore them
+				return;
+			}
+			 
 			JoinQAValue value = null;
 			JoinQAKey key = null;
 
