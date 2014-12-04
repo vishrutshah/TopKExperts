@@ -77,7 +77,7 @@ public class TagsPerPostKey implements WritableComparable {
 	     */
 		@Override
 		public int compareTo(Object object) {
-			JoinQAKey ip2 = (JoinQAKey) object;
+			TagsPerPostKey ip2 = (TagsPerPostKey) object;
 			int postId2 = Integer.parseInt(ip2.getPostId().toString());
 			int postId = Integer.parseInt(getPostId().toString());		
 	        int cmp = (postId == postId2) ? 0 : (postId < postId2 ? -1 : 1);

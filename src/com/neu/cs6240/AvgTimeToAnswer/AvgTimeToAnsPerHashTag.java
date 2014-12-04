@@ -52,22 +52,22 @@ public class AvgTimeToAnsPerHashTag {
 			if (!isValid(parsedData)) {
 				return;
 			}
-
+			
+			// Just in case some minutes values cannot be parsed
+			try{
+				int minutes = Integer.parseInt(parsedData[MINS]);
+				value = new IntWritable(minutes);
+			}catch(NumberFormatException ex){
+				// Ignore the record 
+				return;
+			}
+			
 			String[] hashTags = parsedData[TAGS]
 					.replaceAll("><", HASH_SEPERATOR).replaceAll("<", "")
 					.replaceAll(">", "").split(HASH_SEPERATOR);
-
+			
 			for(String hashTag : hashTags){
 				key = new Text(hashTag);
-				// Just in case some minutes values cannot be parsed
-				try{
-					int minutes = Integer.parseInt(parsedData[MINS]);
-					value = new IntWritable(minutes);
-				}catch(NumberFormatException ex){
-					// Ignore the record 
-					return;
-				}
-				
 				context.write(key, value);
 			}			
 		}
@@ -121,6 +121,7 @@ public class AvgTimeToAnsPerHashTag {
 
 	public static void main(String[] args) throws Exception {
 		Configuration conf = new Configuration();
+		conf.set("mapred.textoutputformat.separator", ",");
 		String[] otherArgs = new GenericOptionsParser(conf, args)
 				.getRemainingArgs();
 		if (otherArgs.length != 2) {

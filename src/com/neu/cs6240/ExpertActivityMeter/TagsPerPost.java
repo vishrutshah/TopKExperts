@@ -26,7 +26,7 @@ public class TagsPerPost {
 
 	private static final int POST_ID = 0;
 	private static final int POST_TYPE_ID = 1;
-	private static final int PARENT_ID = 2;
+	private static final int PARENT_ID = 16;
 	private static final int CREATION_DATE = 3;
 	private static final int OWNER_USER_ID = 6;
 	private static final int TAGS = 10;
