@@ -40,7 +40,7 @@ public class TagsPerPostValue implements Writable {
 		/**
 		 * @return the timeSlot
 		 */
-		public Text getTlimeSlot() {
+		public Text getTimeSlot() {
 			return timeSlot;
 		}
 		
