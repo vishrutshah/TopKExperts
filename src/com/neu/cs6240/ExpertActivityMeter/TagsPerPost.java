@@ -251,7 +251,6 @@ public class TagsPerPost {
 		DistributedCache.addCacheFile(new Path(otherArgs[1]).toUri(),
 				job.getConfiguration());
 
-//		DistributedCache.setLocalFiles(job.getConfiguration(), otherArgs[1]);
 		System.exit(job.waitForCompletion(true) ? 0 : 1);
 	}
 }
