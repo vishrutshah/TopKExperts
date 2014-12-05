@@ -28,6 +28,9 @@ import org.apache.hadoop.util.bloom.BloomFilter;
 import org.apache.hadoop.util.bloom.Key;
 import org.apache.hadoop.util.hash.MurmurHash;
 
+import com.neu.cs6240.TopKExperts.TopKPerHashTag;
+import com.neu.cs6240.TopKExperts.UserAnswerCountPerHashTag;
+
 import au.com.bytecode.opencsv.CSVParser;
 
 public class TagsPerPost {
@@ -251,6 +254,28 @@ public class TagsPerPost {
 		DistributedCache.addCacheFile(new Path(otherArgs[1]).toUri(),
 				job.getConfiguration());
 
-		System.exit(job.waitForCompletion(true) ? 0 : 1);
+		boolean isSucess = false; 
+		
+		isSucess = job.waitForCompletion(true);
+		
+		if(isSucess){
+			// On successful completion of TagsPerPost start CountPerTagPerTimeSlot MR
+			System.out.println("MR - TagsPerPost complete. Starting CountPerTagPerTimeSlot...");
+			String[] argsForMR2 = new String[2];
+			argsForMR2[0] = otherArgs[2];
+			argsForMR2[1] = otherArgs[2] + "CountPerTagPerTimeSlotOutput/";
+			isSucess = CountPerTagPerTimeSlot.initCountPerTagPerTimeSlot(argsForMR2);
+			if(isSucess){
+				// Successfully complete TopKPerHashTag MR
+				System.out.println("All MR - Successful.");
+			}else{
+				// Failed UserAnswerCountPerHashTag MR
+				System.out.println("MR - CountPerTagPerTimeSlot failed.");
+			}
+		}else{
+			System.out.println("MR - TagsPerPost failed.");
+		}
+		
+		System.exit(isSucess ? 0 : 1);
 	}
 }

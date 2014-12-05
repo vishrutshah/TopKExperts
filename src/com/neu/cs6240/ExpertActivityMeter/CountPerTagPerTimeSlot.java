@@ -7,6 +7,7 @@ import java.util.Iterator;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.filecache.DistributedCache;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
@@ -24,6 +25,12 @@ import com.neu.cs6240.ExpertActivityMeter.TagsPerPost.TagsPerPostGroupComparator
 import com.neu.cs6240.ExpertActivityMeter.TagsPerPost.TagsPerPostMapper;
 import com.neu.cs6240.ExpertActivityMeter.TagsPerPost.TagsPerPostPartitioner;
 import com.neu.cs6240.ExpertActivityMeter.TagsPerPost.TagsPerPostReducer;
+import com.neu.cs6240.TopKExperts.UserAnswerCountPerHashTag;
+import com.neu.cs6240.TopKExperts.UserAnswerCountPerHashTagKey;
+import com.neu.cs6240.TopKExperts.UserAnswerCountPerHashTag.UserAnswerCountPerHashTagGroupComparator;
+import com.neu.cs6240.TopKExperts.UserAnswerCountPerHashTag.UserAnswerCountPerHashTagMapper;
+import com.neu.cs6240.TopKExperts.UserAnswerCountPerHashTag.UserAnswerCountPerHashTagPartitioner;
+import com.neu.cs6240.TopKExperts.UserAnswerCountPerHashTag.UserAnswerCountPerHashTagReducer;
 
 import au.com.bytecode.opencsv.CSVParser;
 
@@ -115,7 +122,12 @@ public class CountPerTagPerTimeSlot {
 					NullWritable.get());
 		}
 	}
-	public static void main(String[] args) throws Exception {
+	
+	public static void main(String[] args) throws Exception {		
+		System.exit(CountPerTagPerTimeSlot.initCountPerTagPerTimeSlot(args) ? 0 : 1);	
+	}
+	
+	public static boolean initCountPerTagPerTimeSlot(String[] args) throws Exception{
 		Configuration conf = new Configuration();
 		String[] otherArgs = new GenericOptionsParser(conf, args)
 		.getRemainingArgs();
@@ -133,6 +145,7 @@ public class CountPerTagPerTimeSlot {
 		job.setOutputValueClass(NullWritable.class);
 		FileInputFormat.addInputPath(job, new Path(otherArgs[0]));
 		FileOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
-		System.exit(job.waitForCompletion(true) ? 0 : 1);
+		
+		return job.waitForCompletion(true);
 	}
 }
