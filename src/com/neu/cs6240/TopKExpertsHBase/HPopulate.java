@@ -94,27 +94,53 @@ public class HPopulate {
 		@Override
 		public void map(Object offset, Text value, Context context) throws IOException, InterruptedException{
 			String line[] = this.csvParser.parseLine(value.toString());
+			if(isValid(line)){
+				Put put = new Put(getRowKey(line));	//Unique Row key as Flight year and system timestamp
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_POST_ID),Bytes.toBytes(line[POST_ID]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_POST_TYPE_ID),Bytes.toBytes(line[POST_TYPE_ID]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_ACCEPTED_ANS_ID),Bytes.toBytes(line[ACCEPTED_ANS_ID]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_CREATION_DATE),Bytes.toBytes(line[CREATION_DATE]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_SCORE),Bytes.toBytes(line[SCORE]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_VIEW_COUNT),Bytes.toBytes(line[VIEW_COUNT]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_OWNER_USER_ID),Bytes.toBytes(line[OWNER_USER_ID]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_LAST_EDITOR_DISPLAY_NAME),Bytes.toBytes(line[LAST_EDITOR_DISPLAY_NAME]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_LAST_EDIT_DATE),Bytes.toBytes(line[LAST_EDIT_DATE]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_LAST_ACTIVITY_DATE),Bytes.toBytes(line[LAST_ACTIVITY_DATE]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_TAGS),Bytes.toBytes(line[TAGS]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_ANSWER_COUNT),Bytes.toBytes(line[ANSWER_COUNT]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_COMMENT_COUNT),Bytes.toBytes(line[COMMENT_COUNT]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_FAVORITE_COUNT),Bytes.toBytes(line[FAVORITE_COUNT]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_COMMUNITY_OWNED_DATE),Bytes.toBytes(line[COMMUNITY_OWNED_DATE]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_TITLE),Bytes.toBytes(line[TITLE]));
+				put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_PARENT_ID),Bytes.toBytes(line[PARENT_ID]));
+				
+				h_table.put(put);
+			}
 			
-			Put put = new Put(Bytes.toBytes(line[POST_ID]));	//Unique Row key as Flight year and system timestamp
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_POST_ID),Bytes.toBytes(line[POST_ID]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_POST_TYPE_ID),Bytes.toBytes(line[POST_TYPE_ID]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_ACCEPTED_ANS_ID),Bytes.toBytes(line[ACCEPTED_ANS_ID]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_CREATION_DATE),Bytes.toBytes(line[CREATION_DATE]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_SCORE),Bytes.toBytes(line[SCORE]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_VIEW_COUNT),Bytes.toBytes(line[VIEW_COUNT]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_OWNER_USER_ID),Bytes.toBytes(line[OWNER_USER_ID]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_LAST_EDITOR_DISPLAY_NAME),Bytes.toBytes(line[LAST_EDITOR_DISPLAY_NAME]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_LAST_EDIT_DATE),Bytes.toBytes(line[LAST_EDIT_DATE]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_LAST_ACTIVITY_DATE),Bytes.toBytes(line[LAST_ACTIVITY_DATE]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_TAGS),Bytes.toBytes(line[TAGS]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_ANSWER_COUNT),Bytes.toBytes(line[ANSWER_COUNT]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_COMMENT_COUNT),Bytes.toBytes(line[COMMENT_COUNT]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_FAVORITE_COUNT),Bytes.toBytes(line[FAVORITE_COUNT]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_COMMUNITY_OWNED_DATE),Bytes.toBytes(line[COMMUNITY_OWNED_DATE]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_TITLE),Bytes.toBytes(line[TITLE]));
-			put.add(Bytes.toBytes(TABLE_FAMILY),Bytes.toBytes(COLUMN_PARENT_ID),Bytes.toBytes(line[PARENT_ID]));
-			
-			h_table.put(put);
+		}
+		
+		public byte[] getRowKey(String[] line){
+			String key;
+			if(line[POST_TYPE_ID].equals("1")){
+				key = line[ACCEPTED_ANS_ID];
+			}
+			else{
+				key = line[POST_ID];
+			}
+			byte[] b = Bytes.toBytes(key);
+			return b;	
+		}
+		
+		public boolean isValid(String[] line){
+			boolean b = false;
+			if((line[POST_TYPE_ID].equals("1") && !line[ACCEPTED_ANS_ID].equals("")) ||
+					(line[POST_TYPE_ID].equals("1") && !line[ACCEPTED_ANS_ID].equals(null)) ||
+					(line[POST_TYPE_ID].equals("2") && !line[POST_ID].equals("")) ||
+					(line[POST_TYPE_ID].equals("2") && !line[POST_ID].equals(null))
+					){
+				b=true;
+			}
+			return b;	
 		}
 		
 		
