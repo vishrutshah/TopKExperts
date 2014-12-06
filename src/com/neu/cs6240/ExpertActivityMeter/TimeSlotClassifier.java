@@ -6,14 +6,14 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map.Entry;
 
-public class TimeSlot {
+public class TimeSlotClassifier {
 	
 	private static final String DATE_PATTERN = "yyyy-MM-dd'T'HH:mm:ss.SSS";
 	private static final SimpleDateFormat formatter = new SimpleDateFormat(
 			DATE_PATTERN);
 	private HashMap<Integer, Integer> slotMap = new HashMap<Integer, Integer>(24);
 	
-	public TimeSlot(int noOfSlots) {
+	public TimeSlotClassifier(int noOfSlots) {
 		int slotCounter = 0;
 		int currentSlot = 0;
 		for (int i=0; i<24; i++ ) {

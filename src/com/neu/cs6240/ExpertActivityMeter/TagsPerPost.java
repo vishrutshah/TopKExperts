@@ -1,11 +1,17 @@
 package com.neu.cs6240.ExpertActivityMeter;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.filecache.DistributedCache;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
@@ -19,6 +25,11 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.bloom.BloomFilter;
+import org.apache.hadoop.util.bloom.Key;
+import org.apache.hadoop.util.hash.MurmurHash;
+
+import com.neu.cs6240.TopKExperts.TopKPerHashTag;
+import com.neu.cs6240.TopKExperts.UserAnswerCountPerHashTag;
 
 import au.com.bytecode.opencsv.CSVParser;
 
@@ -41,43 +52,44 @@ public class TagsPerPost {
 		BloomFilter expertsBloomFilter;
 		// initialize CSVParser as comma separated values
 		private CSVParser csvParser = new CSVParser(',', '"');
+		//initialize time slot classifier
+		private TimeSlotClassifier timeClassifier = new TimeSlotClassifier(4);
 
-//		@Override
-//		public void setup(Context context) throws IOException,
-//		InterruptedException {
-//			try {
-//				expertsBloomFilter = new BloomFilter();
-//				Path[] files = DistributedCache.getLocalCacheFiles(context
-//						.getConfiguration());
-//
-//				if (files == null || files.length == 0) {
-//					throw new RuntimeException(
-//							"User information is not set in DistributedCache");
-//				}
-//
-//				// Read all files in the DistributedCache
-//				for (Path p : files) {
-//					BufferedReader rdr = new BufferedReader(
-//							new InputStreamReader(
-//									new FileInputStream(
-//											new File(p.toString()))));
-//
-//					String line;
-//					// For each record in the expert file
-//					while ((line = rdr.readLine()) != null) {
-//						String experts = line.split("    ")[1];
-//						String[] expertUIds = this.csvParser.parseLine(experts);
-//						for(String expertID : expertUIds) {
-//							expertsBloomFilter.add(new Key(expertID.getBytes()));
-//						}
-//					}
-//				}
-//
-//			} catch (IOException e) {
-//				throw new RuntimeException(e);
-//			}
+		@Override
+		public void setup(Context context) throws IOException,
+		InterruptedException {
+			try {
+				expertsBloomFilter = new BloomFilter(1000, 2, MurmurHash.MURMUR_HASH);
+				Path[] files = DistributedCache.getLocalCacheFiles(context
+						.getConfiguration());
 
-//		}
+				if (files == null || files.length == 0) {
+					throw new RuntimeException(
+							"User information is not set in DistributedCache");
+				}
+
+				// Read all files in the DistributedCache
+				for (Path p : files) {
+					BufferedReader rdr = new BufferedReader(
+							new InputStreamReader(
+									new FileInputStream(
+											new File(p.toString()))));
+
+					String line;
+					// For each record in the expert file
+					while ((line = rdr.readLine()) != null) {
+						String experts = line.split("\\s+")[1];
+						String[] expertUIds = this.csvParser.parseLine(experts);
+						for(String expertID : expertUIds) {
+							expertsBloomFilter.add(new Key(expertID.getBytes()));
+						}
+					}
+				}
+
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
 
 		public void map(Object offset, Text line, Context context)
 				throws IOException, InterruptedException {
@@ -101,18 +113,23 @@ public class TagsPerPost {
 			if (parsedData[POST_TYPE_ID].equals("1")) {
 				// Question
 				key = new TagsPerPostKey(parsedData[POST_ID], "Q");
-				value = new TagsPerPostValue(parsedData[TAGS],
-						"");
-			} else {
+				value = new TagsPerPostValue(parsedData[TAGS],"");
+				context.write(key, value);
+			} else 
+				//if (expertsBloomFilter.membershipTest(new Key(parsedData[OWNER_USER_ID].getBytes()))) 
+			{
 				// Answer
 				// User Id must exists otherwise ignore
 				key = new TagsPerPostKey(parsedData[PARENT_ID], "A");
-				value = new TagsPerPostValue("",
-						parsedData[CREATION_DATE]);
-
+				try {
+					value = new TagsPerPostValue("",
+							"TimeSlot" + Integer.toString(timeClassifier.getTimeSlot(parsedData[CREATION_DATE])));
+				} catch (ParseException e) {
+					//failed to parse the time.
+					return;
+				}
+				context.write(key, value);
 			}
-			context.write(key, value);
-
 		}
 
 		/**
@@ -195,7 +212,7 @@ public class TagsPerPost {
 				if (key.getFlag().toString().equals("Q")) {
 					questions.add(new TagsPerPostValue(
 							value.getHashTags().toString(), 
-							 value.getTimeSlot().toString()));
+							value.getTimeSlot().toString()));
 				} else {
 					Iterator<TagsPerPostValue> questionIterator = questions
 							.iterator();
@@ -213,13 +230,13 @@ public class TagsPerPost {
 			}
 		}
 	}
-	
+
 	public static void main(String[] args) throws Exception {
 		Configuration conf = new Configuration();
 		String[] otherArgs = new GenericOptionsParser(conf, args)
-				.getRemainingArgs();
-		if (otherArgs.length != 2) {
-			System.err.println("Usage: TagsPerPost <in> <out>");
+		.getRemainingArgs();
+		if (otherArgs.length != 3) {
+			System.err.println("Usage: TagsPerPost <in1> <in2> <out>");
 			System.exit(2);
 		}
 		Job job = new Job(conf, "TagsPerPost");
@@ -231,7 +248,34 @@ public class TagsPerPost {
 		job.setOutputKeyClass(TagsPerPostKey.class);
 		job.setOutputValueClass(TagsPerPostValue.class);
 		FileInputFormat.addInputPath(job, new Path(otherArgs[0]));
-		FileOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
-		System.exit(job.waitForCompletion(true) ? 0 : 1);
+		FileOutputFormat.setOutputPath(job, new Path(otherArgs[2]));
+
+		// Configure the DistributedCache
+		DistributedCache.addCacheFile(new Path(otherArgs[1]).toUri(),
+				job.getConfiguration());
+
+		boolean isSucess = false; 
+		
+		isSucess = job.waitForCompletion(true);
+		
+		if(isSucess){
+			// On successful completion of TagsPerPost start CountPerTagPerTimeSlot MR
+			System.out.println("MR - TagsPerPost complete. Starting CountPerTagPerTimeSlot...");
+			String[] argsForMR2 = new String[2];
+			argsForMR2[0] = otherArgs[2];
+			argsForMR2[1] = otherArgs[2] + "CountPerTagPerTimeSlotOutput/";
+			isSucess = CountPerTagPerTimeSlot.initCountPerTagPerTimeSlot(argsForMR2);
+			if(isSucess){
+				// Successfully complete TopKPerHashTag MR
+				System.out.println("All MR - Successful.");
+			}else{
+				// Failed UserAnswerCountPerHashTag MR
+				System.out.println("MR - CountPerTagPerTimeSlot failed.");
+			}
+		}else{
+			System.out.println("MR - TagsPerPost failed.");
+		}
+		
+		System.exit(isSucess ? 0 : 1);
 	}
 }
