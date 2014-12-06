@@ -16,43 +16,37 @@ public class TagAverageResponseTime {
 	public static String CENTROID_FILE_NAME = "/centroid/centroid.txt";
 	public static String OUTPUT_FILE_NAME = "/part-00000";
 	public static String DATA_FILE_NAME = "/part";
-	public static String SPLITTER = "\t| ";
-	public static List<Double> mCenters = new ArrayList<Double>();
+	public static String SPLITTER = ",";
+	public static List<Point> centers = new ArrayList<Point>();
 
-	/*
-	 * In Mapper class we are overriding configure function. In this we are
-	 * reading file from Distributed Cache and then storing that into instance
-	 * variable "mCenters"
-	 */
 	public static class Map extends MapReduceBase implements
-			Mapper<LongWritable, Text, DoubleWritable, DoubleWritable> {
+			Mapper<LongWritable, Text, Point, Point> {
+		
 		// initialize CSVParser as comma separated values
 		private CSVParser csvParser = new CSVParser(',', '"');
 		
 		@Override
 		public void configure(JobConf job) {
 			try {
-				// Fetch the file from Distributed Cache Read it and store the
-				// centroid in the ArrayList
+				// Get centroid from Distributed cache
 				Path[] cacheFiles = DistributedCache.getLocalCacheFiles(job);
 				if (cacheFiles != null && cacheFiles.length > 0) {
 					String line;
-					mCenters.clear();
-					BufferedReader cacheReader = new BufferedReader(
-							new FileReader(cacheFiles[0].toString()));
+					centers.clear();					
+					BufferedReader br = new BufferedReader(new FileReader(cacheFiles[0].toString()));
 					try {
-						// Read the file split by the splitter and store it in
-						// the list
-						while ((line = cacheReader.readLine()) != null) {
-							String[] temp = line.split(SPLITTER);
-							mCenters.add(Double.parseDouble(temp[0]));
+						while ((line = br.readLine()) != null) {
+							String[] columns = line.split(SPLITTER);
+							Point point; 
+							point = new Point(columns[0], columns[1]);
+							centers.add(point);
 						}
 					} finally {
-						cacheReader.close();
+						br.close();
 					}
 				}
 			} catch (IOException e) {
-				System.err.println("Exception reading DistribtuedCache: " + e);
+				System.err.println("IO Exception - Distributed cache: " + e.getMessage());
 			}
 		}
 
@@ -62,7 +56,7 @@ public class TagAverageResponseTime {
 		 */
 		@Override
 		public void map(LongWritable key, Text line,
-				OutputCollector<DoubleWritable, DoubleWritable> output,
+				OutputCollector<Point, Point> output,
 				Reporter reporter) throws IOException {
 			
 			// Parse the input line
@@ -74,50 +68,61 @@ public class TagAverageResponseTime {
 				return;
 			}
 			
-			double point = Double.parseDouble(parsedData[1]);
-			double min1, min2 = Double.MAX_VALUE, nearest_center = mCenters
-					.get(0);
+			if(parsedData.length != 3){
+				return;
+			}
+			
+			Point p1 = new Point(parsedData[1], parsedData[2]);
+			p1.setHashTag(parsedData[0]);
+			
+			double min1 = Double.MAX_VALUE;
+			double min2 = Double.MAX_VALUE;						 
+			Point nearestCenter = centers.get(0);
+			
 			// Find the minimum center from a point
-			for (double c : mCenters) {
-				min1 = c - point;
+			for (Point p : centers) {
+				min1 = p.euclidian(p1);
+				min2 = p.euclidian(nearestCenter);				
 				if (Math.abs(min1) < Math.abs(min2)) {
-					nearest_center = c;
+					nearestCenter = p;
 					min2 = min1;
 				}
 			}
+			
 			// Emit the nearest center and the point
-			output.collect(new DoubleWritable(nearest_center),
-					new DoubleWritable(point));
+			output.collect(nearestCenter,p1);
 		}
 	}
 
 	public static class Reduce extends MapReduceBase implements
-			Reducer<DoubleWritable, DoubleWritable, DoubleWritable, Text> {
-
-		/*
-		 * Reduce function will emit all the points to that center and calculate
-		 * the next center for these points
-		 */
+			Reducer<Point, Point, Text, Text> {
 		@Override
-		public void reduce(DoubleWritable key, Iterator<DoubleWritable> values,
-				OutputCollector<DoubleWritable, Text> output, Reporter reporter)
+		public void reduce(Point key, Iterator<Point> values,
+				OutputCollector<Text, Text> output, Reporter reporter)
 				throws IOException {
-			double newCenter;
-			double sum = 0;
-			int no_elements = 0;
-			String points = "";
-			while (values.hasNext()) {
-				double d = values.next().get();
-				points = points + " " + Double.toString(d);
-				sum = sum + d;
-				++no_elements;
+			
+			double newX = 0.0;
+			double newY = 0.0;
+			int total = 0;
+			Text hashTag = null;
+			
+			while(values.hasNext()){
+				Point value = values.next();
+				double x = value.getAvgResponseTimeValue();
+				double y = value.getPopularityValue();
+				hashTag = value.getHashTag();
+				newX = newX + x;
+				newY = newY + y;
+				++total;
 			}
-
-			// We have new center now
-			newCenter = sum / no_elements;
-
+			
+			newX = (newX / total);
+			newY = (newY / total);
+			StringBuilder op = new StringBuilder();
+			op.append(String.valueOf(newX)).append(",").append(String.valueOf(newY));
+			
 			// Emit new center and point
-			output.collect(new DoubleWritable(newCenter), new Text(points));
+			output.collect(hashTag, new Text(op.toString()));
 		}
 	}
 
@@ -146,8 +151,9 @@ public class TagAverageResponseTime {
 		int iteration = 0;
 		boolean isdone = false;
 		
-		while (! isdone) {
+		while (! isdone || iteration < 2) {
 			JobConf conf = new JobConf(TagAverageResponseTime.class);
+			conf.set("mapred.textoutputformat.separator", ",");
 			if (iteration == 0) {
 				// upload the file to hdfs. Overwrite any existing copy.
 				Path hdfsPath = new Path(input + CENTROID_FILE_NAME);				
@@ -159,10 +165,10 @@ public class TagAverageResponseTime {
 			}
 
 			conf.setJobName("KMeans - TagAverageResponseTime");
-			conf.setMapOutputKeyClass(DoubleWritable.class);
-			conf.setMapOutputValueClass(DoubleWritable.class);
+			conf.setMapOutputKeyClass(Point.class);
+			conf.setMapOutputValueClass(Point.class);
 			
-			conf.setOutputKeyClass(DoubleWritable.class);
+			conf.setOutputKeyClass(Text.class);
 			conf.setOutputValueClass(Text.class);
 			conf.setMapperClass(Map.class);
 			
@@ -178,14 +184,15 @@ public class TagAverageResponseTime {
 
 			Path ofile = new Path(output + OUTPUT_FILE_NAME);
 			FileSystem fs = FileSystem.get(new Configuration());
-			BufferedReader br = new BufferedReader(new InputStreamReader(
-					fs.open(ofile)));
-			List<Double> centers_next = new ArrayList<Double>();
+			BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(ofile)));
+			
+			List<Point> centers_next = new ArrayList<Point>();
 			String line = br.readLine();
 			while (line != null) {
-				String[] sp = line.split(SPLITTER);
+				String[] sp = line.split(",");
 				double c = Double.parseDouble(sp[0]);
-				centers_next.add(c);
+				Point p = new Point(sp[0], sp[1]);
+				centers_next.add(p);
 				line = br.readLine();
 			}
 			br.close();
@@ -198,14 +205,13 @@ public class TagAverageResponseTime {
 			}
 			Path prevfile = new Path(prev);
 			FileSystem fs1 = FileSystem.get(new Configuration());
-			BufferedReader br1 = new BufferedReader(new InputStreamReader(
-					fs1.open(prevfile)));
-			List<Double> centers_prev = new ArrayList<Double>();
+			BufferedReader br1 = new BufferedReader(new InputStreamReader(fs1.open(prevfile)));
+			List<Point> centers_prev = new ArrayList<Point>();
 			String l = br1.readLine();
 			while (l != null) {
 				String[] sp1 = l.split(SPLITTER);
-				double d = Double.parseDouble(sp1[0]);
-				centers_prev.add(d);
+				Point p = new Point(sp1[0], sp1[1]);				
+				centers_prev.add(p);
 				l = br1.readLine();
 			}
 			br1.close();
@@ -215,10 +221,10 @@ public class TagAverageResponseTime {
 			Collections.sort(centers_next);
 			Collections.sort(centers_prev);
 
-			Iterator<Double> it = centers_prev.iterator();
-			for (double d : centers_next) {
-				double temp = it.next();
-				if (Math.abs(temp - d) <= 0.1) {
+			Iterator<Point> it = centers_prev.iterator();
+			for (Point d : centers_next) {
+				Point temp = it.next();
+				if (Math.abs(temp.euclidian(d)) <= 0.1) {
 					isdone = true;
 				} else {
 					isdone = false;
