@@ -147,46 +147,44 @@ public class KMeansTimePopularity {
 			Text newPoint = new Text(String.valueOf(newAvgTime) + ","
 					+ String.valueOf(newPopularity));
 
-			switch (mapperNumber) {
-			case 1:
-				multiOutput.write("first", newPoint, NullWritable.get());
-				break;
-			case 2:
-				multiOutput.write("second", newPoint, NullWritable.get());
-				break;
-			case 3:
-				multiOutput.write("third", newPoint, NullWritable.get());
-				break;
-			default:
-				break;
-			}
-
+			writeResults(mapperNumber, newPoint, false);
+			
 			Point pnt1 = new Point(newC);
 			Point pnt2 = new Point(key.getCenter());
 
 			double diff = pnt1.euclidian(pnt2);
 			System.out.println("Diff = " + diff);
 			if (Math.abs(diff) < 1) {				
-				writeResults(mapperNumber, key.getCenter());
+				writeResults(mapperNumber, key.getCenter(), true);
 				for (Text d : data) {
-					writeResults(mapperNumber, new Text(d));
+					writeResults(mapperNumber, new Text(d), true);
 				}
 			}else{
 				context.getCounter(HadoopCounter.ISCONVERED).increment(1);
 			}
 		}
 
-		private void writeResults(int mapperNumber, Text point)
+		private void writeResults(int mapperNumber, Text point, boolean isConverged)
 				throws IOException, InterruptedException {
+			String name1 = "first";
+			String name2 = "second";
+			String name3 = "third";
+			
+			if(isConverged){
+				name1 = "firstConverged";
+				name2 = "secondConverged";
+				name3 = "thirdConverged";
+			}
+			
 			switch (mapperNumber) {
 			case 1:
-				multiOutput.write("first", point, NullWritable.get());
+				multiOutput.write(name1, point, NullWritable.get());
 				break;
 			case 2:
-				multiOutput.write("second", point, NullWritable.get());
+				multiOutput.write(name2, point, NullWritable.get());
 				break;
 			case 3:
-				multiOutput.write("third", point, NullWritable.get());
+				multiOutput.write(name3, point, NullWritable.get());
 				break;
 			default:
 				break;
@@ -310,6 +308,8 @@ public class KMeansTimePopularity {
 			FileOutputFormat.setOutputPath(job, output);
 
 			MultipleOutputs.addNamedOutput(job, "first",
+					TextOutputFormat.class, Text.class, NullWritable.class);
+			MultipleOutputs.addNamedOutput(job, "firstConverged",
 					TextOutputFormat.class, Text.class, NullWritable.class);
 			// MultipleOutputs.addNamedOutput(job, "second",
 			// TextOutputFormat.class, Text.class, NullWritable.class);
