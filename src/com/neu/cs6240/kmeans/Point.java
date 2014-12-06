@@ -10,7 +10,8 @@ import org.apache.hadoop.io.WritableComparable;
 
 public class Point implements WritableComparable{
 	
-	public static final DecimalFormat twoDForm = new DecimalFormat("#.##");
+	private static final DecimalFormat twoDForm = new DecimalFormat("#.##");
+	private static final int TIME_NORMALIZER = 1590397;
 	
 	// average response to a correct answer for hash tag
 	Text avgResponseTime = null;
@@ -55,6 +56,7 @@ public class Point implements WritableComparable{
 	
 	public double getAvgResponseTimeValue(){
 		Double d = Double.parseDouble(this.avgResponseTime.toString());
+		d = d / TIME_NORMALIZER;
 		return Double.valueOf(twoDForm.format(d.doubleValue()));
 	}
 	
