@@ -1,8 +1,6 @@
 package com.neu.cs6240.ExpertActivityMeter;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.text.ParseException;
@@ -11,7 +9,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.filecache.DistributedCache;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
@@ -28,16 +26,14 @@ import org.apache.hadoop.util.bloom.BloomFilter;
 import org.apache.hadoop.util.bloom.Key;
 import org.apache.hadoop.util.hash.MurmurHash;
 
-import com.neu.cs6240.TopKExperts.TopKPerHashTag;
-import com.neu.cs6240.TopKExperts.UserAnswerCountPerHashTag;
-
 import au.com.bytecode.opencsv.CSVParser;
 
 public class TagsPerPost {
 
 	private static final int POST_ID = 0;
 	private static final int POST_TYPE_ID = 1;
-	private static final int PARENT_ID = 16;
+	//	private static final int PARENT_ID = 16;
+	private static final int PARENT_ID = 2;
 	private static final int CREATION_DATE = 3;
 	private static final int OWNER_USER_ID = 6;
 	private static final int TAGS = 10;
@@ -60,32 +56,23 @@ public class TagsPerPost {
 		InterruptedException {
 			try {
 				expertsBloomFilter = new BloomFilter(1000, 2, MurmurHash.MURMUR_HASH);
-				Path[] files = DistributedCache.getLocalCacheFiles(context
-						.getConfiguration());
+				
+				Configuration conf = context.getConfiguration();
+				Path topKExpertsFilePath = new Path(conf.get("topKExpertsFilePath"));
+				FileSystem fs = topKExpertsFilePath.getFileSystem(conf);
 
-				if (files == null || files.length == 0) {
-					throw new RuntimeException(
-							"User information is not set in DistributedCache");
-				}
+				BufferedReader rdr = new BufferedReader(
+						new InputStreamReader(fs.open(topKExpertsFilePath)));
 
-				// Read all files in the DistributedCache
-				for (Path p : files) {
-					BufferedReader rdr = new BufferedReader(
-							new InputStreamReader(
-									new FileInputStream(
-											new File(p.toString()))));
-
-					String line;
-					// For each record in the expert file
-					while ((line = rdr.readLine()) != null) {
-						String experts = line.split("\\s+")[1];
-						String[] expertUIds = this.csvParser.parseLine(experts);
-						for(String expertID : expertUIds) {
-							expertsBloomFilter.add(new Key(expertID.getBytes()));
-						}
+				String line;
+				// For each record in the expert file
+				while ((line = rdr.readLine()) != null) {
+					String experts = line.split("\\s+")[1];
+					String[] expertUIds = this.csvParser.parseLine(experts);
+					for(String expertID : expertUIds) {
+						expertsBloomFilter.add(new Key(expertID.getBytes()));
 					}
 				}
-
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}
@@ -239,6 +226,8 @@ public class TagsPerPost {
 			System.err.println("Usage: TagsPerPost <in1> <in2> <out>");
 			System.exit(2);
 		}
+		Path topKExpertsFilePath = new Path(otherArgs[1]);
+		conf.set("topKExpertsFilePath", topKExpertsFilePath.toString());
 		Job job = new Job(conf, "TagsPerPost");
 		job.setJarByClass(TagsPerPost.class);
 		job.setMapperClass(TagsPerPostMapper.class);
@@ -250,14 +239,10 @@ public class TagsPerPost {
 		FileInputFormat.addInputPath(job, new Path(otherArgs[0]));
 		FileOutputFormat.setOutputPath(job, new Path(otherArgs[2]));
 
-		// Configure the DistributedCache
-		DistributedCache.addCacheFile(new Path(otherArgs[1]).toUri(),
-				job.getConfiguration());
-
 		boolean isSucess = false; 
-		
+
 		isSucess = job.waitForCompletion(true);
-		
+
 		if(isSucess){
 			// On successful completion of TagsPerPost start CountPerTagPerTimeSlot MR
 			System.out.println("MR - TagsPerPost complete. Starting CountPerTagPerTimeSlot...");
@@ -275,7 +260,7 @@ public class TagsPerPost {
 		}else{
 			System.out.println("MR - TagsPerPost failed.");
 		}
-		
+
 		System.exit(isSucess ? 0 : 1);
 	}
 }
