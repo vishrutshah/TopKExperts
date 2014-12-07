@@ -30,13 +30,15 @@ public class HPopulateActivityMeter {
 		public static final String HASHES       = "Hashes";
 		public static final String CREATIONDATE = "Creationdate";
 		public static final String PARENTID 	= "PArentID";
-		
+		public static final String UID 			= "OwnerUserId";
+				
 		// Schema Element Name definitions to Bytes
 		public static final byte[] BYTES_COL_FAMILY 	= Bytes.toBytes(COL_FAMILY);
 		public static final byte[] BYTES_QNAFLAG 		= Bytes.toBytes(QNAFLAG);
 		public static final byte[] BYTES_HASHES  		= Bytes.toBytes(HASHES);
 		public static final byte[] BYTES_CREATIONDATE 	= Bytes.toBytes(CREATIONDATE);
 		public static final byte[] BYTES_PARENTID 		= Bytes.toBytes(PARENTID);
+		public static final byte[] BYTES_UID 		    = Bytes.toBytes(UID);
 		
 		
 		static class HPopulateActivityMeterMapper extends Mapper <Object, Text, ImmutableBytesWritable, Writable>
@@ -52,6 +54,7 @@ public class HPopulateActivityMeter {
 				String postTypeID = anEntry[1];
 		        String CreationDateStr = anEntry[3];
 		        String tagStr = anEntry[10];
+		        String uidStr = anEntry[6];
 		        		        
 		        // Chesk id post is an Answer-post
 		        boolean isPostA = postTypeID.equals("2");
@@ -60,6 +63,7 @@ public class HPopulateActivityMeter {
 		        ImmutableBytesWritable ibwCompKey = new ImmutableBytesWritable(Bytes.toBytes(postID));
 		        
 		        hBaseRow.add(BYTES_COL_FAMILY, BYTES_QNAFLAG, Bytes.toBytes(postTypeID));
+		        hBaseRow.add(BYTES_COL_FAMILY, BYTES_UID, Bytes.toBytes(uidStr));
 		        
 				if (isPostA)
 				{                                        

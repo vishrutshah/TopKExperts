@@ -1,12 +1,15 @@
 package com.neu.cs6240.ExpertActivityMeter;
 
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.text.ParseException;
 import java.util.HashMap;
 import java.util.Map.Entry;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.client.Get;
@@ -31,6 +34,12 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.Reducer.Context;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
+import org.apache.hadoop.util.bloom.BloomFilter;
+import org.apache.hadoop.util.bloom.Key;
+import org.apache.hadoop.util.hash.MurmurHash;
+
+import au.com.bytecode.opencsv.CSVParser;
+
 
 public class HComputeActivityMeter 
 {
@@ -44,6 +53,7 @@ public class HComputeActivityMeter
 	public static final String HASHES       = "Hashes";
 	public static final String CREATIONDATE = "Creationdate";
 	public static final String PARENTID 	= "PArentID";
+	public static final String UID 			= "OwnerUserId";
 
 	// Schema Element Name definitions to Bytes
 	public static final byte[] BYTES_COL_FAMILY 	= Bytes.toBytes(COL_FAMILY);
@@ -51,11 +61,42 @@ public class HComputeActivityMeter
 	public static final byte[] BYTES_HASHES  		= Bytes.toBytes(HASHES);
 	public static final byte[] BYTES_CREATIONDATE 	= Bytes.toBytes(CREATIONDATE);
 	public static final byte[] BYTES_PARENTID 		= Bytes.toBytes(PARENTID);
+	public static final byte[] BYTES_UID 		    = Bytes.toBytes(UID);
 
 	static class HComputeActivityMeterMapper extends TableMapper<CountPerTagPerTimeSlotKey, NullWritable>
 	{	 
 		//initialize time slot classifier
 		private TimeSlotClassifier timeClassifier = new TimeSlotClassifier(4);
+		BloomFilter expertsBloomFilter;
+		private CSVParser csvParser = new CSVParser(',', '"');
+		
+		@Override
+		public void setup(Context context) throws IOException,
+		InterruptedException {
+			try {
+				expertsBloomFilter = new BloomFilter(1000, 2, MurmurHash.MURMUR_HASH);
+				
+				Configuration conf = context.getConfiguration();
+				Path topKExpertsFilePath = new Path(conf.get("topKExpertsFilePath"));
+				FileSystem fs = topKExpertsFilePath.getFileSystem(conf);
+
+				BufferedReader rdr = new BufferedReader(
+						new InputStreamReader(fs.open(topKExpertsFilePath)));
+
+				String line;
+				// For each record in the expert file
+				while ((line = rdr.readLine()) != null) {
+					String experts = line.split("\\s+")[1];
+					String[] expertUIds = this.csvParser.parseLine(experts);
+					for(String expertID : expertUIds) {
+						expertsBloomFilter.add(new Key(expertID.getBytes()));
+					}
+				}
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+		
 
 		public void map(ImmutableBytesWritable ibwRow, Result value, Context context) throws IOException, InterruptedException 
 		{
@@ -64,7 +105,8 @@ public class HComputeActivityMeter
 			String hashes = "";
 			String creationDate = new String(value.getValue(BYTES_COL_FAMILY, BYTES_CREATIONDATE));
 			String parentID = new String(value.getValue(BYTES_COL_FAMILY, BYTES_PARENTID));
-
+			String uID = new String(value.getValue(BYTES_COL_FAMILY, BYTES_UID));
+			
 			HTable htable = null;
 			try {
 				htable = new HTable(context.getConfiguration(), TABLE_NAME);
@@ -85,15 +127,21 @@ public class HComputeActivityMeter
 						.replaceAll(">", "").split(HASH_SEPERATOR);
 				CountPerTagPerTimeSlotKey key = null;
 
-				for(String hashTag : hashTags){
-					try {
-						key = new CountPerTagPerTimeSlotKey(hashTag, "TimeSlot" 
-								+ Integer.toString(timeClassifier.getTimeSlot(creationDate)));
-					} 
-					catch (ParseException e) {
-						return;
+				if (!uID.isEmpty())
+				{
+					if (expertsBloomFilter.membershipTest(new Key(uID.getBytes())))
+					{
+						for(String hashTag : hashTags){
+							try {
+								key = new CountPerTagPerTimeSlotKey(hashTag, "TimeSlot" 
+										+ Integer.toString(timeClassifier.getTimeSlot(creationDate)));
+							} 
+							catch (ParseException e) {
+								return;
+							}
+							context.write(key, NullWritable.get());
+						}
 					}
-					context.write(key, NullWritable.get());
 				}
 			}
 		}
@@ -162,15 +210,19 @@ public class HComputeActivityMeter
 	{
 		Configuration config = HBaseConfiguration.create();
 		String[] otherArgs = new GenericOptionsParser(config, args).getRemainingArgs();
-		if (otherArgs.length != 1) 
+		if (otherArgs.length != 2) 
 		{
 			System.err.println("Usage: HCompute <out>");
 			System.exit(2);
 		}
+		Path topKExpertsFilePath = new Path(args[0]);
+		config.set("topKExpertsFilePath", topKExpertsFilePath.toString());
+		
 		Job job = new Job(config, "HCompute");
 		job.setJarByClass(HComputeActivityMeter.class); 
 		job.setOutputKeyClass(CountPerTagPerTimeSlotKey.class);
 		job.setOutputValueClass(NullWritable.class);
+		
 
 		// Construct a list of filters
 		FilterList lFilters = new FilterList(FilterList.Operator.MUST_PASS_ALL);
@@ -206,7 +258,7 @@ public class HComputeActivityMeter
 		job.setGroupingComparatorClass(HComputeActivityMeterGroupComparator.class);
 		job.setPartitionerClass(HComputeActivityMeterPartitioner.class);
 
-		FileOutputFormat.setOutputPath(job, new Path(args[0]));
+		FileOutputFormat.setOutputPath(job, new Path(args[1]));
 
 		if (job.waitForCompletion(true)) 
 			System.exit(0); 
