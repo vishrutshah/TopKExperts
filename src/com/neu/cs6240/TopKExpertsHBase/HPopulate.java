@@ -33,7 +33,7 @@ public class HPopulate {
 	/**
 	 * @param args
 	 */
-	private static final String TABLE_NAME = "Post";
+	private static final String TABLE_NAME = "Post1";
 	public static final String TABLE_FAMILY = "PostData";
 	private static final int POST_ID = 0;
 	private static final int POST_TYPE_ID = 1;
@@ -54,9 +54,6 @@ public class HPopulate {
 	private static final int PARENT_ID = 16;
 	
 	
-	private static final String DATE_PATTERN = "yyyy-MM-dd'T'HH:mm:ss.SSS";
-	private static final SimpleDateFormat formatter = new SimpleDateFormat(
-			DATE_PATTERN);
 	private static final String COLUMN_POST_ID = "COLUMN_POST_ID";
 	private static final String COLUMN_POST_TYPE_ID = "COLUMN_POST_TYPE_ID";
 	private static final String COLUMN_ACCEPTED_ANS_ID = "COLUMN_ACCEPTED_ANS_ID";
@@ -120,13 +117,7 @@ public class HPopulate {
 		}
 		
 		public byte[] getRowKey(String[] line){
-			String key;
-			if(line[POST_TYPE_ID].equals("1")){
-				key = line[ACCEPTED_ANS_ID];
-			}
-			else{
-				key = line[POST_ID];
-			}
+			String key = line[POST_ID];
 			byte[] b = Bytes.toBytes(key);
 			return b;	
 		}
